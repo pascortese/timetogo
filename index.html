@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calcolo orario di uscita</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      padding: 1rem;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 1.25rem;
+      max-width: 360px;
+      margin: auto;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: 500;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.6rem;
+      font-size: 1.1rem;
+      margin-top: 0.25rem;
+    }
+    button {
+      margin-top: 1.2rem;
+      width: 100%;
+      padding: 0.75rem;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+    }
+    .secondary {
+      background: #22c55e;
+    }
+    .result {
+      margin-top: 1.2rem;
+      font-size: 1.2rem;
+      text-align: center;
+      font-weight: 600;
+    }
+    .note {
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      text-align: center;
+      color: #555;
+    }
+    .overtime-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+    .overtime-row input {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Orario di uscita</h1>
+
+    <label>
+      Ora di ingresso
+      <input type="time" id="startTime" />
+    </label>
+
+    <label>
+      Straordinario
+      <div class="overtime-row">
+        <input type="number" id="overtimeHours" min="0" placeholder="Ore" />
+        <input type="number" id="overtimeMinutes" min="0" max="59" placeholder="Minuti" />
+      </div>
+    </label>
+
+    <button onclick="calculateEndTime()">Calcola orario di uscita</button>
+    <button class="secondary" onclick="addNotifications()">Attiva notifiche</button>
+
+    <div class="result" id="result"></div>
+    <div class="note">7h 12m lavoro + 30m pausa + eventuale straordinario<br>Notifiche: 10 minuti prima e all'uscita</div>
+  </div>
+
+  <script>
+    let calculatedEndTime = null;
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+
+    function calculateEndTime() {
+      const startTime = document.getElementById('startTime').value;
+      if (!startTime) {
+        document.getElementById('result').innerText = 'Inserisci l\'ora di ingresso';
+        return;
+      }
+
+      const [h, m] = startTime.split(':').map(Number);
+      const end = new Date();
+      end.setHours(h, m, 0, 0);
+
+      const overtimeH = parseInt(document.getElementById('overtimeHours').value) || 0;
+      const overtimeM = parseInt(document.getElementById('overtimeMinutes').value) || 0;
+      end.setMinutes(end.getMinutes() + 462 + overtimeH * 60 + overtimeM);
+
+      calculatedEndTime = end;
+      document.getElementById('result').innerText = `Puoi uscire alle ${end.toTimeString().slice(0,5)}`;
+    }
+
+    async function addNotifications() {
+      if (!calculatedEndTime) {
+        alert('Calcola prima l’orario di uscita');
+        return;
+      }
+
+      if (!('Notification' in window)) {
+        alert('Notifiche non supportate');
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert('Permesso notifiche negato');
+        return;
+      }
+
+      const now = new Date();
+      const schedule = async (time, title, body) => {
+        const delay = time.getTime() - now.getTime();
+        if (delay > 0) {
+          setTimeout(async () => {
+            const reg = await navigator.serviceWorker.ready;
+            reg.showNotification(title, {
+              body,
+              icon: 'icon-192.png'
+            });
+          }, delay);
+        }
+      };
+
+      schedule(new Date(calculatedEndTime.getTime() - 10 * 60000), 'Quasi ora', 'Mancano 10 minuti all’uscita');
+      schedule(calculatedEndTime, 'Fine lavoro', 'È ora di uscire 🎉');
+
+      alert('Notifiche attivate ✔️');
+    }
+  </script>
+</body>
+</html>
